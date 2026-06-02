@@ -12,17 +12,30 @@
 <body>
 
 <h1>Collaborative Editor</h1>
-<h3 id="onlineUsers">
-    Online Users: 0
-</h3>
+
+<input
+    type="text"
+    id="editorName"
+    placeholder="Masukkan Nama Anda"
+    value="Agus">
+
+<br><br>
 
 <p id="typingStatus"></p>
 
 <div id="editor" style="height:300px;"></div>
 
-<br>
+<br><br>
 
 <button id="saveBtn">Save</button>
+
+<button onclick="window.location='/history/{{ $document->id }}'">
+    History
+</button>
+
+<button onclick="window.location='/logs/{{ $document->id }}'">
+    Edit Logs
+</button>
 
 <script src="https://cdn.quilljs.com/1.3.6/quill.js"></script>
 
@@ -42,14 +55,36 @@ document.addEventListener('DOMContentLoaded', function () {
         `{!! $document->content ?? '' !!}`
     );
 
-    // cegah loop realtime
     let isUpdating = false;
     let typingTimer;
 
     // =========================
+    // CURSOR TRACKING
+    // =========================
+    quill.on('selection-change', function(range) {
+
+        if (!range) return;
+
+        fetch('/cursor-update', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRF-TOKEN': document
+                    .querySelector('meta[name="csrf-token"]')
+                    .getAttribute('content')
+            },
+            body: JSON.stringify({
+                document_id: {{ $document->id }},
+                position: range.index
+            })
+        });
+
+    });
+
+    // =========================
     // UPDATE DOCUMENT
     // =========================
-    quill.on('text-change', function (delta, oldDelta, source) {
+    quill.on('text-change', function(delta, oldDelta, source) {
 
         if (source !== 'user') return;
 
@@ -60,17 +95,18 @@ document.addEventListener('DOMContentLoaded', function () {
         typingTimer = setTimeout(() => {
 
             fetch('/update-document/{{ $document->id }}', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'X-CSRF-TOKEN': document
-                        .querySelector('meta[name="csrf-token"]')
-                        .getAttribute('content')
-                },
-                body: JSON.stringify({
-                    content: quill.root.innerHTML
-                })
-            });
+    method: 'POST',
+    headers: {
+        'Content-Type': 'application/json',
+        'X-CSRF-TOKEN': document
+            .querySelector('meta[name="csrf-token"]')
+            .getAttribute('content')
+    },
+    body: JSON.stringify({
+        content: quill.root.innerHTML,
+        editor_name: document.getElementById('editorName').value
+    })
+});
 
         }, 500);
 
@@ -81,89 +117,60 @@ document.addEventListener('DOMContentLoaded', function () {
     // =========================
     setTimeout(() => {
 
-        console.log(window.Echo);
-
         if (window.Echo) {
 
             console.log('Echo aktif');
 
-           window.Echo.join('document.{{ $document->id }}')
+            window.Echo.channel('document.{{ $document->id }}')
 
-    .here((users) => {
+            .listen('.DocumentUpdated', (e) => {
 
-        document.getElementById('onlineUsers')
-            .innerHTML =
-            'Online Users: ' + users.length;
+                console.log('Realtime masuk:', e);
 
-    })
+                if (quill.root.innerHTML === e.content) {
+                    return;
+                }
 
-    .joining((user) => {
+                isUpdating = true;
 
-        let current = parseInt(
-            document.getElementById('onlineUsers')
-                .innerHTML.replace(/\D/g, '')
-        );
+                const range = quill.getSelection();
 
-        document.getElementById('onlineUsers')
-            .innerHTML =
-            'Online Users: ' + (current + 1);
+                quill.clipboard.dangerouslyPasteHTML(
+                    e.content
+                );
 
-    })
+                if (range) {
+                    quill.setSelection(
+                        range.index,
+                        range.length
+                    );
+                }
 
-    .leaving((user) => {
+                setTimeout(() => {
+                    isUpdating = false;
+                }, 100);
 
-        let current = parseInt(
-            document.getElementById('onlineUsers')
-                .innerHTML.replace(/\D/g, '')
-        );
+            })
 
-        document.getElementById('onlineUsers')
-            .innerHTML =
-            'Online Users: ' + (current - 1);
+            .listen('.CursorMoved', (e) => {
 
-    })
+                console.log('CursorMoved:', e);
 
-    .listen('.DocumentUpdated', (e) => {
+                const status =
+                    document.getElementById('typingStatus');
 
-        console.log('Realtime masuk:', e);
+                status.innerHTML =
+                    'Cursor user lain di posisi: ' + e.position;
 
-        if (quill.root.innerHTML === e.content) {
-            return;
-        }
+                clearTimeout(window.cursorHide);
 
-        isUpdating = true;
+                window.cursorHide = setTimeout(() => {
 
-        const range = quill.getSelection();
+                    status.innerHTML = '';
 
-        quill.clipboard.dangerouslyPasteHTML(e.content);
+                }, 1500);
 
-        if (range) {
-            quill.setSelection(range.index, range.length);
-        }
-
-        setTimeout(() => {
-            isUpdating = false;
-        }, 100);
-
-    })
-
-    .listen('.DocumentTyping', () => {
-
-        const status =
-            document.getElementById('typingStatus');
-
-        status.innerHTML =
-            'User sedang mengetik...';
-
-        clearTimeout(window.typingHide);
-
-        window.typingHide = setTimeout(() => {
-
-            status.innerHTML = '';
-
-        }, 1000);
-
-    });
+            });
 
         } else {
 
@@ -193,7 +200,9 @@ document.addEventListener('DOMContentLoaded', function () {
         })
         .then(response => response.json())
         .then(data => {
+
             alert(data.message);
+
         });
 
     });

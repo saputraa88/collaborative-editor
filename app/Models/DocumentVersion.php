@@ -4,10 +4,10 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
 
-class Document extends Model
+class DocumentVersion extends Model
 {
     protected $fillable = [
-        'title',
-        'content'
+        'document_id',
+        'content',
     ];
 }

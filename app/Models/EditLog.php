@@ -4,10 +4,11 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
 
-class Document extends Model
+class EditLog extends Model
 {
     protected $fillable = [
-        'title',
+        'document_id',
+        'editor_name',
         'content'
     ];
 }

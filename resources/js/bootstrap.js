@@ -8,6 +8,11 @@ import Pusher from 'pusher-js';
 
 window.Pusher = Pusher;
 
+console.log('KEY:', import.meta.env.VITE_REVERB_APP_KEY);
+console.log('HOST:', import.meta.env.VITE_REVERB_HOST);
+console.log('PORT:', import.meta.env.VITE_REVERB_PORT);
+console.log('SCHEME:', import.meta.env.VITE_REVERB_SCHEME);
+
 window.Echo = new Echo({
     broadcaster: 'reverb',
 
